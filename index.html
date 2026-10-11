@@ -285,12 +285,36 @@ button.addEventListener("click", async () => {
 
     } catch (err) {
 
-        console.error(err);
+    console.error(err);
 
-        status.innerText =
-            "Compression failed.";
+    let message = err?.message || String(err);
 
-    } finally {
+    if (message.includes("SharedArrayBuffer")) {
+        status.innerHTML = `
+            ❌ FFmpeg could not start.<br>
+            Your browser requires SharedArrayBuffer support.<br>
+            GitHub Pages may need proper COOP/COEP headers, or try a recent Chrome/Edge version.
+        `;
+    }
+    else if (message.includes("fetch")) {
+        status.innerHTML = `
+            ❌ Failed to download FFmpeg engine files.<br>
+            Check your internet connection and browser console.
+        `;
+    }
+    else if (message.includes("Invalid data")) {
+        status.innerHTML = `
+            ❌ The selected file is not a valid audio file or is corrupted.
+        `;
+    }
+    else {
+        status.innerHTML = `
+            ❌ Compression failed.<br>
+            <strong>Error:</strong> ${message}
+        `;
+    }
+
+} finally {
 
         button.disabled = false;
     }
