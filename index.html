@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Audio Compressor</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Inter, Arial, sans-serif;
+    background: #0f172a;
+    color: white;
+}
+
+.container {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 24px;
+}
+
+.card {
+    background: #1e293b;
+    padding: 24px;
+    border-radius: 16px;
+}
+
+h1 {
+    margin-top: 0;
+}
+
+.subtitle {
+    color: #94a3b8;
+    margin-bottom: 24px;
+}
+
+input[type=file] {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.presets {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.preset {
+    flex: 1;
+    min-width: 150px;
+}
+
+.preset input {
+    display: none;
+}
+
+.preset label {
+    display: block;
+    padding: 14px;
+    border-radius: 10px;
+    background: #334155;
+    text-align: center;
+    cursor: pointer;
+}
+
+.preset input:checked + label {
+    background: #2563eb;
+}
+
+button {
+    border: none;
+    background: #10b981;
+    color: white;
+    padding: 14px 24px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background: #059669;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.status {
+    margin-top: 20px;
+}
+
+.progress {
+    margin-top: 15px;
+    height: 12px;
+    background: #334155;
+    border-radius: 50px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #22c55e;
+    transition: width .3s;
+}
+
+.download {
+    margin-top: 20px;
+}
+
+.download a {
+    color: #4ade80;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🎧 Audio Compressor</h1>
+        <p class="subtitle">
+            Convert audio files to Opus format for lectures,
+            podcasts, and Telegram sharing.
+        </p>
+
+        <input type="file" id="audioFile" accept="audio/*">
+
+        <div class="presets">
+            <div class="preset">
+                <input checked type="radio" name="bitrate" id="b16" value="16">
+                <label for="b16">
+                    Lecture<br>
+                    16 kbps
+                </label>
+            </div>
+
+            <div class="preset">
+                <input type="radio" name="bitrate" id="b18" value="18">
+                <label for="b18">
+                    Balanced<br>
+                    18 kbps
+                </label>
+            </div>
+
+            <div class="preset">
+                <input type="radio" name="bitrate" id="b35" value="35">
+                <label for="b35">
+                    Quality<br>
+                    35 kbps
+                </label>
+            </div>
+        </div>
+
+        <button id="compressBtn">
+            Compress Audio
+        </button>
+
+        <div class="status" id="status"></div>
+
+        <div class="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="download" id="download"></div>
+    </div>
+</div>
+
+<script type="module">
+
+import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+import { fetchFile } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+const status = document.getElementById("status");
+const progressBar = document.getElementById("progressBar");
+const downloadDiv = document.getElementById("download");
+const button = document.getElementById("compressBtn");
+
+const ffmpeg = new FFmpeg();
+
+let loaded = false;
+
+async function loadFFmpeg() {
+
+    if (loaded) return;
+
+    status.innerText = "Loading FFmpeg...";
+
+    ffmpeg.on("progress", ({ progress }) => {
+        progressBar.style.width =
+            Math.round(progress * 100) + "%";
+    });
+
+    await ffmpeg.load();
+
+    loaded = true;
+}
+
+button.addEventListener("click", async () => {
+
+    const file =
+        document.getElementById("audioFile").files[0];
+
+    if (!file) {
+        alert("Select an audio file");
+        return;
+    }
+
+    downloadDiv.innerHTML = "";
+    progressBar.style.width = "0%";
+
+    const bitrate =
+        document.querySelector(
+            'input[name="bitrate"]:checked'
+        ).value;
+
+    try {
+
+        button.disabled = true;
+
+        await loadFFmpeg();
+
+        status.innerText = "Preparing file...";
+
+        const inputName = "input";
+        const outputName = "output.opus";
+
+        await ffmpeg.writeFile(
+            inputName,
+            await fetchFile(file)
+        );
+
+        status.innerText =
+            "Compressing audio...";
+
+        await ffmpeg.exec([
+            "-i",
+            inputName,
+            "-c:a",
+            "libopus",
+            "-b:a",
+            bitrate + "k",
+            outputName
+        ]);
+
+        const data =
+            await ffmpeg.readFile(outputName);
+
+        const blob = new Blob(
+            [data.buffer],
+            {
+                type: "audio/ogg"
+            }
+        );
+
+        const url =
+            URL.createObjectURL(blob);
+
+        const originalSize =
+            (file.size / 1024 / 1024).toFixed(2);
+
+        const newSize =
+            (blob.size / 1024 / 1024).toFixed(2);
+
+        status.innerText =
+            "Compression completed ✅";
+
+        downloadDiv.innerHTML = `
+            <p>
+                Original: ${originalSize} MB<br>
+                Compressed: ${newSize} MB
+            </p>
+
+            <a href="${url}"
+               download="${file.name.replace(/\.[^/.]+$/, "")}.opus">
+               Download Compressed Audio
+            </a>
+        `;
+
+    } catch (err) {
+
+        console.error(err);
+
+        status.innerText =
+            "Compression failed.";
+
+    } finally {
+
+        button.disabled = false;
+    }
+
+});
+</script>
+</body>
+</html>
